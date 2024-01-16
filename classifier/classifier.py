@@ -5,7 +5,7 @@ import numpy as np
 from argparse import ArgumentParser
 from pygenn.cuda_backend import DeviceSelect
 from ml_genn import Connection, Population, Network
-from ml_genn.callbacks import Callback, Checkpoint
+from ml_genn.callbacks import Callback, Checkpoint, VarRecorder
 from ml_genn.compilers import EPropCompiler, InferenceCompiler
 from ml_genn.connectivity import Dense, FixedProbability
 from ml_genn.initializers import Normal
@@ -130,6 +130,7 @@ parser.add_argument("--seed", type=int, default=1234)
 parser.add_argument("--resume-epoch", type=int, default=None)
 parser.add_argument("--error-quantization-levels", type=int, default=None)
 parser.add_argument("--log-quantization", action="store_true")
+parser.add_argument("--record-e", action="store_true")
 parser.add_argument("--surrogate-gradient", choices=["boxcar", "triangle"], default="triangle")
 
 parser.add_argument("--hidden-size", type=int, nargs="*")
@@ -168,7 +169,8 @@ unique_suffix = "_".join(("_".join(str(i) for i in val) if isinstance(val, list)
                          else str(val))
                          for arg, val in vars(args).items()
                          if arg not in ["train", "cpu", "resume_epoch",
-                                        "test_all", "kernel_profiling"])
+                                        "test_all", "kernel_profiling"
+                                        "record_e"])
 
 # If dataset is MNIST
 spikes = []
@@ -303,14 +305,18 @@ if args.train:
                      CSVTrainLog(f"train_output_{unique_suffix}.csv", output,
                                  args.resume_epoch is not None),
                      ConnectivityCheckpoint(serialiser)]
-        metrics, _  = compiled_net.train({input: spikes},
-                                         {output: labels},
-                                         num_epochs=args.num_epochs,
-                                         callbacks=callbacks, shuffle=True,
-                                         start_epoch=start_epoch)
+        if args.record_e:
+            callbacks.append(VarRecorder(output, key="output_error", genn_var="E"))
+        metrics, callback_data  = compiled_net.train({input: spikes},
+                                                     {output: labels},
+                                                     num_epochs=args.num_epochs,
+                                                     callbacks=callbacks, shuffle=True,
+                                                     start_epoch=start_epoch)
         end_time = perf_counter()
         print(f"Accuracy = {100 * metrics[output].result}%")
         print(f"Time = {end_time - start_time}s")
+        if args.record_e:
+            np.save(f"train_e_{unique_suffix}.npy", callback_data["output_error"])
 else:
     print(f"Loading inference model from checkpoint {args.num_epochs - 1}")
 
