@@ -120,6 +120,7 @@ def inference(genn_kwargs, args, network, serialiser, latest_spike_time, epoch, 
 parser = ArgumentParser()
 parser.add_argument("--device-id", type=int, default=0, help="CUDA device ID")
 parser.add_argument("--train", action="store_true", help="Train model")
+parser.add_argument("--num-validate", type=int, default=None)
 parser.add_argument("--cpu", action="store_true", help="Use CPU for inference")
 parser.add_argument("--kernel-profiling", action="store_true", help="Output kernel profiling data")
 parser.add_argument("--test-all", action="store_true", help="Test all checkpoints up to num epochs")
@@ -183,17 +184,29 @@ if args.dataset == "mnist":
     # Latency encode MNIST digits
     num_input = 28 * 28
     num_output = 10
-    labels = (download_and_parse_mnist_file("train-labels-idx1-ubyte.gz", target_dir="./data") if args.train 
-              else download_and_parse_mnist_file("t10k-labels-idx1-ubyte.gz", target_dir="./data"))
-    spikes = log_latency_encode_data(
-        (download_and_parse_mnist_file("train-images-idx3-ubyte.gz", target_dir="./data") if args.train 
-         else download_and_parse_mnist_file("t10k-images-idx3-ubyte.gz", target_dir="./data")),
-        20.0, 51)
+    
+    if args.num_validate is None:
+        labels = (download_and_parse_mnist_file("train-labels-idx1-ubyte.gz", target_dir="./data") if args.train 
+                  else download_and_parse_mnist_file("t10k-labels-idx1-ubyte.gz", target_dir="./data"))
+        images = (download_and_parse_mnist_file("train-images-idx3-ubyte.gz", target_dir="./data") if args.train 
+                  else download_and_parse_mnist_file("t10k-images-idx3-ubyte.gz", target_dir="./data")
+    else:
+        train_labels = download_and_parse_mnist_file("train-labels-idx1-ubyte.gz", target_dir="./data")
+        train_images = download_and_parse_mnist_file("train-images-idx3-ubyte.gz", target_dir="./data")
+        
+        train_slice = np.s_[:-args.num_validate]
+        validate_slice = np.s_[-args.num_validate:]
+        
+        labels = train_labels[train_slice] if args.train else train_labels[validate_slice]
+        images = train_images[train_slice] if args.train else train_images[validate_slice]
+    
+    spikes = log_latency_encode_data(images, 20.0, 51)
 # Otherwise
 else:
     from tonic.datasets import DVSGesture, SHD, SMNIST
     from tonic.transforms import Compose, Downsample
-
+    
+    assert args.num_validate is None
     # Load Tonic datasets
     if args.dataset == "shd":
         dataset = SHD(save_to='./data', train=args.train)
