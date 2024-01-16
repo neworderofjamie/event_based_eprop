@@ -236,8 +236,8 @@ max_spikes = calc_max_spikes(spikes)
 latest_spike_time = calc_latest_spike_time(spikes)
 print(f"Max spikes {max_spikes}, latest spike time {latest_spike_time}")
 
-genn_kwargs = {"deviceSelectMethod": DeviceSelect.MANUAL,
-               "manualDeviceID": args.device_id}
+genn_kwargs = {"device_select_method": DeviceSelect.MANUAL,
+               "manual_device_id": args.device_id}
 
 serialiser = Numpy("checkpoints_" + unique_suffix)
 network = Network()
@@ -337,7 +337,7 @@ else:
 
     # Use CPU backend if desired
     if args.cpu:
-        genn_kwargs["backend"]="SingleThreadedCPU"
+        genn_kwargs["backend"]="single_threaded_cpu"
 
     # Loop through trained epochs
     if args.test_all:
