@@ -104,7 +104,8 @@ for q in quant_levels:
                    color=bar_colours, width=BAR_WIDTH)
 quant_axis.set_xticks(tick_x, tick_label)
 quant_axis.set_xlabel("Error quantisation")
-quant_axis.set_ylabel("Error events per output neuron per trial")
+quant_axis.set_ylabel("Number of error events\nper output per trial")
+quant_axis.set_yscale("log")
 quant_fig.legend([patches.Patch(color=c) for c in colours.values()], colours.keys(),
                  loc="lower center", ncol=len(colours), frameon=False)
 quant_fig.tight_layout(pad=0, rect=[0.0, 0.15, 1.0, 1.0])
