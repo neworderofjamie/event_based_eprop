@@ -189,7 +189,7 @@ if args.dataset == "mnist":
         labels = (download_and_parse_mnist_file("train-labels-idx1-ubyte.gz", target_dir="./data") if args.train 
                   else download_and_parse_mnist_file("t10k-labels-idx1-ubyte.gz", target_dir="./data"))
         images = (download_and_parse_mnist_file("train-images-idx3-ubyte.gz", target_dir="./data") if args.train 
-                  else download_and_parse_mnist_file("t10k-images-idx3-ubyte.gz", target_dir="./data")
+                  else download_and_parse_mnist_file("t10k-images-idx3-ubyte.gz", target_dir="./data"))
     else:
         train_labels = download_and_parse_mnist_file("train-labels-idx1-ubyte.gz", target_dir="./data")
         train_images = download_and_parse_mnist_file("train-images-idx3-ubyte.gz", target_dir="./data")
