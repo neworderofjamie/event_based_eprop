@@ -18,47 +18,6 @@ BAR_WIDTH = 1.0
 BAR_PAD = 1.1
 GROUP_PAD = 2.5
 
-def plot_accuracy_bars(df, axis):
-    pal = sns.color_palette()
-    bar_x = np.arange(df.shape[0]) * GROUP_PAD
-
-    # Show bars for train and test accuracy
-    train = axis.bar(bar_x, df["mean_train_accuracy"], yerr=df["sd_train_accuracy"],
-                     width=BAR_WIDTH, color=pal[0])
-    test = axis.bar(bar_x + BAR_PAD, df["mean_test_accuracy"], yerr=df["sd_test_accuracy"],
-                    width=BAR_WIDTH, color=pal[1])
-
-    # Remove axis junk
-    sns.despine(ax=axis)
-    axis.xaxis.grid(False)
-
-    axis.set_xticks(bar_x + (BAR_PAD / 2))
-    return train, test
-
-def plot_test_accuracy_bars(df, axis, extra_refs={}):
-    pal = sns.color_palette()
-    bar_x = np.arange(df.shape[0] + len(extra_refs)) * BAR_PAD
-
-    # Show bars for test accuracy
-    test = axis.bar(bar_x[:df.shape[0]], df["mean_test_accuracy"], yerr=df["sd_test_accuracy"],
-                    width=BAR_WIDTH, color=pal[0])
-
-    extra_ref_actors = {}
-    for i, (pal_idx, perf) in enumerate(extra_refs.items()):
-        if isinstance(perf, tuple):
-            extra_ref_actors[pal_idx] = axis.bar([(df.shape[0] + i) * BAR_PAD], [perf[0]], yerr=[perf[1]],
-                                                 width=BAR_WIDTH, color=pal[pal_idx])
-        else:
-            extra_ref_actors[pal_idx] = axis.bar([(df.shape[0] + i) * BAR_PAD], [perf],
-                                                 width=BAR_WIDTH, color=pal[pal_idx])
-    # Remove axis junk
-    sns.despine(ax=axis)
-    axis.xaxis.grid(False)
-
-    axis.set_xticks(bar_x)
-
-    return test, extra_ref_actors
-
 # Dictionary to hold data
 data = {"surrogate_gradient": [], "quant_level": [], "quant_algo": [], "seed": [], "test_accuracy": [], "train_accuracy": []}
 
