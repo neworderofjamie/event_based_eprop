@@ -178,14 +178,16 @@ labels = []
 num_input = None
 num_output = None
 if args.dataset == "mnist":
-    import mnist
+    from mnist import download_and_parse_mnist_file
 
     # Latency encode MNIST digits
     num_input = 28 * 28
     num_output = 10
-    labels = mnist.train_labels() if args.train else mnist.test_labels()
+    labels = (download_and_parse_mnist_file("train-labels-idx1-ubyte.gz", target_dir="./data") if args.train 
+              else download_and_parse_mnist_file("t10k-labels-idx1-ubyte.gz", target_dir="./data"))
     spikes = log_latency_encode_data(
-        mnist.train_images() if args.train else mnist.test_images(),
+        (download_and_parse_mnist_file("train-images-idx3-ubyte.gz", target_dir="./data") if args.train 
+         else download_and_parse_mnist_file("t10k-images-idx3-ubyte.gz", target_dir="./data")),
         20.0, 51)
 # Otherwise
 else:
