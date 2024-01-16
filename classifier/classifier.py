@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 from argparse import ArgumentParser
-from pygenn.genn_wrapper.CUDABackend import DeviceSelect_MANUAL
+from pygenn.cuda_backend import DeviceSelect
 from ml_genn import Connection, Population, Network
 from ml_genn.callbacks import Callback, Checkpoint
 from ml_genn.compilers import EPropCompiler, InferenceCompiler
@@ -128,6 +128,9 @@ parser.add_argument("--num-epochs", type=int, default=50, help="Number of traini
 parser.add_argument("--dataset", choices=["smnist", "shd", "dvs_gesture", "mnist"], required=True)
 parser.add_argument("--seed", type=int, default=1234)
 parser.add_argument("--resume-epoch", type=int, default=None)
+parser.add_argument("--error-quantization-levels", type=int, default=None)
+parser.add_argument("--log-quantization", action="store_true")
+parser.add_argument("--surrogate-gradient", choices=["boxcar", "triangle"], default="triangle")
 
 parser.add_argument("--hidden-size", type=int, nargs="*")
 parser.add_argument("--hidden-recurrent", choices=["True", "False"], nargs="*")
@@ -216,8 +219,7 @@ max_spikes = calc_max_spikes(spikes)
 latest_spike_time = calc_latest_spike_time(spikes)
 print(f"Max spikes {max_spikes}, latest spike time {latest_spike_time}")
 
-genn_kwargs = {"selectGPUByDeviceID": True,
-               "deviceSelectMethod": DeviceSelect_MANUAL,
+genn_kwargs = {"deviceSelectMethod": DeviceSelect.MANUAL,
                "manualDeviceID": args.device_id}
 
 serialiser = Numpy("checkpoints_" + unique_suffix)
@@ -286,6 +288,9 @@ if args.train:
     # Create EProp compiler and compile
     compiler = EPropCompiler(example_timesteps=int(np.ceil(latest_spike_time)),
                              losses="sparse_categorical_crossentropy", rng_seed=args.seed,
+                             surrogate_gradient=args.surrogate_gradient,
+                             error_quantization_levels=args.error_quantization_levels,
+                             log_quantization=args.log_quantization,
                              optimiser="adam", batch_size=args.batch_size, 
                              kernel_profiling=args.kernel_profiling, **genn_kwargs)
     compiled_net = compiler.compile(network, name=f"classifier_train_{unique_suffix}")
