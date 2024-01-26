@@ -111,7 +111,7 @@ def inference(genn_kwargs, args, network, serialiser, latest_spike_time, epoch, 
         end_time = perf_counter()
         print(f"Accuracy = {100 * metrics[output].result}%")
         print(f"Time = {end_time - start_time}s")
-        
+
         if args.kernel_profiling:
             print(f"Neuron update time = {compiled_net.genn_model.neuron_update_time}")
             print(f"Presynaptic update time = {compiled_net.genn_model.presynaptic_update_time}")
@@ -128,6 +128,7 @@ parser.add_argument("--test-all", action="store_true", help="Test all checkpoint
 parser.add_argument("--batch-size", type=int, default=512, help="Batch size")
 parser.add_argument("--num-epochs", type=int, default=50, help="Number of training epochs")
 parser.add_argument("--dataset", choices=["smnist", "shd", "dvs_gesture", "mnist"], required=True)
+parser.add_argument("--dataset-threshold", type=int, default=None, help="Minimum number of events in timestep required to spike")
 parser.add_argument("--seed", type=int, default=1234)
 parser.add_argument("--resume-epoch", type=int, default=None)
 parser.add_argument("--error-quantization-levels", type=int, default=None)
@@ -197,31 +198,31 @@ if args.dataset == "mnist":
     # Latency encode MNIST digits
     num_input = 28 * 28
     num_output = 10
-    
+
     if args.num_validate is None:
         labels = (download_and_parse_mnist_file("train-labels-idx1-ubyte.gz", target_dir="./data") if args.train 
                   else download_and_parse_mnist_file("t10k-labels-idx1-ubyte.gz", target_dir="./data"))
         images = (download_and_parse_mnist_file("train-images-idx3-ubyte.gz", target_dir="./data") if args.train 
                   else download_and_parse_mnist_file("t10k-images-idx3-ubyte.gz", target_dir="./data"))
-        
+
         labels = labels[data_start::data_step]
         images = images[data_start::data_step]
     else:
         train_labels = download_and_parse_mnist_file("train-labels-idx1-ubyte.gz", target_dir="./data")
         train_images = download_and_parse_mnist_file("train-images-idx3-ubyte.gz", target_dir="./data")
-        
+
         train_slice = np.s_[data_start:-args.num_validate:data_step]
         validate_slice = np.s_[-args.num_validate + data_start::data_step]
-        
+
         labels = train_labels[train_slice] if args.train else train_labels[validate_slice]
         images = train_images[train_slice] if args.train else train_images[validate_slice]
-    
+
     spikes = log_latency_encode_data(images, 20.0, 51)
 # Otherwise
 else:
     from tonic.datasets import DVSGesture, SHD, SMNIST
     from tonic.transforms import Compose, Downsample
-    
+
     assert args.num_validate is None
     # Load Tonic datasets
     if args.dataset == "shd":
@@ -245,7 +246,8 @@ else:
     for i in range(data_start, len(dataset), data_step):
         events, label = dataset[i]:
         spikes.append(preprocess_tonic_spikes(events, dataset.ordering,
-                                              sensor_size))
+                                              sensor_size, dt=1.0,
+                                              histogram_thresh=args.dataset_threshold))
         labels.append(label)
 
 # Determine max spikes and latest spike time
@@ -262,7 +264,7 @@ with network:
     # Add spike input population
     input = Population(SpikeInput(max_spikes=args.batch_size * max_spikes),
                        num_input)
-    
+
     # Add output population
     output = Population(LeakyIntegrate(tau_mem=20.0, readout="sum_var", softmax=args.train),
                         num_output)
@@ -334,7 +336,6 @@ if args.train:
         # Evaluate model on SHD
         start_time = perf_counter()
         start_epoch = 0 if args.resume_epoch is None else (args.resume_epoch + 1)
-        
         record_data = (communicator is None or communicator.rank == 0)
         if record_data:
             callbacks = ["batch_progress_bar", Checkpoint(serialiser),
