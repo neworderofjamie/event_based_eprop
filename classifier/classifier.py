@@ -119,6 +119,7 @@ def inference(genn_kwargs, args, network, serialiser, latest_spike_time, epoch, 
 
 parser = ArgumentParser()
 parser.add_argument("--device-id", type=int, default=0, help="CUDA device ID")
+parser.add_argument("--use-mpi", action="store_true", help="Use MPI for faster training")
 parser.add_argument("--train", action="store_true", help="Train model")
 parser.add_argument("--num-validate", type=int, default=None)
 parser.add_argument("--cpu", action="store_true", help="Use CPU for inference")
@@ -173,6 +174,18 @@ unique_suffix = "_".join(("_".join(str(i) for i in val) if isinstance(val, list)
                                         "test_all", "kernel_profiling"
                                         "record_e"])
 
+if args.train and args.use_mpi:
+    from ml_genn.communicators import MPI
+    communicator = MPI()
+    print(f"Training on rank {communicator.rank} / {communicator.num_ranks}")
+
+    data_start = communicator.rank
+    data_step = communicator.num_ranks
+else:
+    communicator = None
+    data_start = 0
+    data_step = 1
+    
 # If dataset is MNIST
 spikes = []
 labels = []
@@ -190,12 +203,15 @@ if args.dataset == "mnist":
                   else download_and_parse_mnist_file("t10k-labels-idx1-ubyte.gz", target_dir="./data"))
         images = (download_and_parse_mnist_file("train-images-idx3-ubyte.gz", target_dir="./data") if args.train 
                   else download_and_parse_mnist_file("t10k-images-idx3-ubyte.gz", target_dir="./data"))
+        
+        labels = labels[data_start::data_step]
+        images = images[data_start::data_step]
     else:
         train_labels = download_and_parse_mnist_file("train-labels-idx1-ubyte.gz", target_dir="./data")
         train_images = download_and_parse_mnist_file("train-images-idx3-ubyte.gz", target_dir="./data")
         
-        train_slice = np.s_[:-args.num_validate]
-        validate_slice = np.s_[-args.num_validate:]
+        train_slice = np.s_[data_start:-args.num_validate:data_step]
+        validate_slice = np.s_[-args.num_validate + data_start::data_step]
         
         labels = train_labels[train_slice] if args.train else train_labels[validate_slice]
         images = train_images[train_slice] if args.train else train_images[validate_slice]
@@ -226,7 +242,8 @@ else:
     num_output = len(dataset.classes)
 
     # Preprocess spike
-    for events, label in dataset:
+    for i in range(data_start, len(dataset), data_step):
+        events, label = dataset[i]:
         spikes.append(preprocess_tonic_spikes(events, dataset.ordering,
                                               sensor_size))
         labels.append(label)
@@ -309,6 +326,7 @@ if args.train:
                              error_quantization_levels=args.error_quantization_levels,
                              log_quantization=args.log_quantization,
                              optimiser="adam", batch_size=args.batch_size, 
+                             communicator=communicator,
                              kernel_profiling=args.kernel_profiling, **genn_kwargs)
     compiled_net = compiler.compile(network, name=f"classifier_train_{unique_suffix}")
 
@@ -316,12 +334,17 @@ if args.train:
         # Evaluate model on SHD
         start_time = perf_counter()
         start_epoch = 0 if args.resume_epoch is None else (args.resume_epoch + 1)
-        callbacks = ["batch_progress_bar", Checkpoint(serialiser),
-                     CSVTrainLog(f"train_output_{unique_suffix}.csv", output,
-                                 args.resume_epoch is not None),
-                     ConnectivityCheckpoint(serialiser)]
-        if args.record_e:
-            callbacks.append(VarRecorder(output, key="output_error", genn_var="E"))
+        
+        record_data = (communicator is None or communicator.rank == 0)
+        if record_data:
+            callbacks = ["batch_progress_bar", Checkpoint(serialiser),
+                         CSVTrainLog(f"train_output_{unique_suffix}.csv", output,
+                                     args.resume_epoch is not None),
+                         ConnectivityCheckpoint(serialiser)]
+            if args.record_e:
+                callbacks.append(VarRecorder(output, key="output_error", genn_var="E"))
+        else:
+            callbacks = []
         metrics, callback_data  = compiled_net.train({input: spikes},
                                                      {output: labels},
                                                      num_epochs=args.num_epochs,
@@ -330,7 +353,7 @@ if args.train:
         end_time = perf_counter()
         print(f"Accuracy = {100 * metrics[output].result}%")
         print(f"Time = {end_time - start_time}s")
-        if args.record_e:
+        if record_data and args.record_e:
             np.save(f"train_e_{unique_suffix}.npy", callback_data["output_error"])
 else:
     print(f"Loading inference model from checkpoint {args.num_epochs - 1}")
