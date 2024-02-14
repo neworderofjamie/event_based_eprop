@@ -131,7 +131,7 @@ parser.add_argument("--dataset", choices=["smnist", "shd", "dvs_gesture", "mnist
 parser.add_argument("--dataset-threshold", type=int, default=None, help="Minimum number of events in timestep required to spike")
 parser.add_argument("--seed", type=int, default=1234)
 parser.add_argument("--resume-epoch", type=int, default=None)
-parser.add_argument("--error-quantization-levels", type=int, default=None)
+parser.add_argument("--quantization-scale", type=float, default=None)
 parser.add_argument("--log-quantization", action="store_true")
 parser.add_argument("--record-e", action="store_true")
 parser.add_argument("--surrogate-gradient", choices=["boxcar", "triangle"], default="triangle")
@@ -244,7 +244,7 @@ else:
 
     # Preprocess spike
     for i in range(data_start, len(dataset), data_step):
-        events, label = dataset[i]:
+        events, label = dataset[i]
         spikes.append(preprocess_tonic_spikes(events, dataset.ordering,
                                               sensor_size, dt=1.0,
                                               histogram_thresh=args.dataset_threshold))
@@ -325,7 +325,7 @@ if args.train:
     compiler = EPropCompiler(example_timesteps=int(np.ceil(latest_spike_time)),
                              losses="sparse_categorical_crossentropy", rng_seed=args.seed,
                              surrogate_gradient=args.surrogate_gradient,
-                             error_quantization_levels=args.error_quantization_levels,
+                             quantization_scale=args.quantization_scale,
                              log_quantization=args.log_quantization,
                              optimiser="adam", batch_size=args.batch_size, 
                              communicator=communicator,
