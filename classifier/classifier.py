@@ -72,6 +72,66 @@ class ConnectivityCheckpoint(Callback):
         self._compiled_network.save_connectivity((epoch,), self.serialiser)
 
 
+class TransitionsRecorder(Callback):
+    def __init__(self, pop, genn_var, key=None):
+        # Stash key, GeNN var and population
+        self.key = key
+        self._var = genn_var
+        self._pop = pop
+
+    def set_params(self, data, compiled_network, **kwargs):
+        self._batch_size = compiled_network.genn_model.batch_size
+        self._compiled_network = compiled_network
+
+        # Create default batch mask in case on_batch_begin not called
+        self._batch_mask = np.ones(self._batch_size, dtype=bool)
+
+        try:
+            # Get GeNN population from compiled model
+            pop = compiled_network.neuron_populations[self._pop]
+
+            # Get neuronmodel variables
+            pop_vars = pop.model.get_vars()
+
+            # Find variable
+            var = next(v for v in pop_vars if v.name == self._var)
+        except StopIteration:
+            raise RuntimeError(f"Model does not have variable "
+                               f"{self._var} to record")
+
+        # Create empty list to hold recorded data
+        data[self.key] = []
+        self._data = data[self.key]
+        self._prev_output = None
+
+    def on_timestep_end(self, timestep: int):
+        # If anything should be recorded this batch
+        if np.any(self._batch_mask):
+            # Copy variable from device
+            pop = self._compiled_network.neuron_populations[self._pop]
+            pop.pull_var_from_device(self._var)
+            
+            # If there isn't already counter, add one
+            if len(self._data) == 0:
+                self._data.append(0)
+
+            # Get values
+            var_values = pop.vars[self._var].values
+            
+            # Add number of differences from previous values to counter
+            if self._prev_output is not None:
+                self._data[-1] += np.sum(var_values != self._prev_output)
+
+            # Update previous output
+            self._prev_output = var_values
+
+    def on_batch_begin(self, batch: int):
+        # Add zeroed counter to hold number
+        self._data.append(0)
+
+    def get_data(self):
+        return self.key, self._data
+
 
 def pad_hidden_layer_argument(arg, num_hidden_layers, context, default=None):
     # If argument wasn't specified but there is a default, repeat default for each hidden layer
@@ -343,7 +403,7 @@ if args.train:
                                      args.resume_epoch is not None),
                          ConnectivityCheckpoint(serialiser)]
             if args.record_e:
-                callbacks.append(VarRecorder(output, key="output_error", genn_var="E"))
+                callbacks.append(TransitionsRecorder(output, key="output_error", genn_var="E"))
         else:
             callbacks = []
         metrics, callback_data  = compiled_net.train({input: spikes},
@@ -355,11 +415,7 @@ if args.train:
         print(f"Accuracy = {100 * metrics[output].result}%")
         print(f"Time = {end_time - start_time}s")
         if record_data and args.record_e:
-            error = callback_data["output_error"]
-            print(error[0].shape)
-            num_error_transitions = [np.sum(e[1:,:] != e[:-1,:]) / e.shape[1] for e in error]
-            print(num_error_transitions[0].shape)
-            np.save(f"train_error_transitions_{unique_suffix}.npy", num_error_transitions)
+            np.save(f"train_error_transitions_{unique_suffix}.npy", callback_data["output_error"])
 else:
     print(f"Loading inference model from checkpoint {args.num_epochs - 1}")
 
