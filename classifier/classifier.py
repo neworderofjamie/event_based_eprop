@@ -356,7 +356,9 @@ if args.train:
         print(f"Time = {end_time - start_time}s")
         if record_data and args.record_e:
             error = callback_data["output_error"]
-            num_error_transitions = [np.sum(e[1:,:] != e[:-1,:]) / e.shape[2] for e in error]
+            print(error[0].shape)
+            num_error_transitions = [np.sum(e[1:,:] != e[:-1,:]) / e.shape[1] for e in error]
+            print(num_error_transitions[0].shape)
             np.save(f"train_error_transitions_{unique_suffix}.npy", num_error_transitions)
 else:
     print(f"Loading inference model from checkpoint {args.num_epochs - 1}")
