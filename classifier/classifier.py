@@ -194,6 +194,7 @@ parser.add_argument("--seed", type=int, default=1234)
 parser.add_argument("--resume-epoch", type=int, default=None)
 parser.add_argument("--quantization-scale", type=float, default=None)
 parser.add_argument("--log-quantization", action="store_true")
+parser.add_argument("--log-quantization-min", type=float, default=-5.0)
 parser.add_argument("--record-e", action="store_true")
 parser.add_argument("--surrogate-gradient", choices=["boxcar", "triangle"], default="triangle")
 
@@ -393,6 +394,7 @@ if args.train:
                              surrogate_gradient=args.surrogate_gradient,
                              quantization_scale=args.quantization_scale,
                              log_quantization=args.log_quantization,
+                             log_min=args.log_quantization_min,
                              optimiser="adam", batch_size=args.batch_size, 
                              communicator=communicator,
                              kernel_profiling=args.kernel_profiling, **genn_kwargs)
