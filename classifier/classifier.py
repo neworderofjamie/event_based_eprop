@@ -3,6 +3,7 @@ import os
 import numpy as np
 
 from argparse import ArgumentParser
+from json import dump
 from pygenn.cuda_backend import DeviceSelect
 from ml_genn import Connection, Population, Network
 from ml_genn.callbacks import Callback, Checkpoint, VarRecorder
@@ -234,6 +235,11 @@ unique_suffix = "_".join(("_".join(str(i) for i in val) if isinstance(val, list)
                          if arg not in ["train", "cpu", "resume_epoch",
                                         "test_all", "kernel_profiling"
                                         "record_e"])
+
+# When training, create parameters file containing arguments in easier-to-handle way
+if args.train:
+    with open(f"params_{unique_suffix}.json", "w") as fp:
+        dump(vars(args), fp)
 
 if args.train and args.use_mpi:
     from ml_genn.communicators import MPI
